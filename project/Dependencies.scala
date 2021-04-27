@@ -35,8 +35,8 @@ object Dependencies {
 
     val silencer = "1.7.2"
 
-    val kanela = "1.0.7" // instrumentation
-    val kamon = "2.1.11" // metrics
+    val kanela = "1.0.9"
+    val kamon = "2.1.17"
 
     val wavesProtobufSchemas = "1.3.1"
     val wavesJ = "1.0.1"
@@ -116,7 +116,7 @@ object Dependencies {
   private val slf4j = "org.slf4j" %% "slf4j-api" % Version.slf4j
   private val julToSlf4j = "org.slf4j" % "jul-to-slf4j" % Version.slf4j
   private val janino = "org.codehaus.janino" % "janino" % Version.janino
-  private val kamonCore = kamonModule("core", Version.kamon)
+  private val kamonCore = kamonModule("core")
 
   private val wavesProtobufSchemas = ("com.wavesplatform" % "protobuf-schemas" % Version.wavesProtobufSchemas classifier "proto") % "protobuf"
 
@@ -248,6 +248,10 @@ object Dependencies {
       kamonCore,
       kamonModule("influxdb"),
       kamonModule("system-metrics"),
+      kamonModule("status-page"),
+      kamonModule("jaeger"),
+      kamonModule("akka-http"),
+      kamonModule("logback"),
       influxDb,
       commonsNet,
       swaggerUi,
@@ -298,6 +302,7 @@ object Dependencies {
       betterMonadicFor,
       mouse,
       grpcNetty,
+      kamonCore,
       wavesProtobufSchemas
     ) ++ testKit ++ silencer ++ Seq(
       jsonScalaPb % Test // for testing purposes

@@ -21,7 +21,7 @@ import com.wavesplatform.dex.model.Events.{OrderCanceled, OrderExecuted}
 import com.wavesplatform.dex.model.{BuyLimitOrder, LimitOrder, OrderValidator, SellLimitOrder, _}
 import com.wavesplatform.dex.queue.{ValidatedCommand, ValidatedCommandWithMeta}
 import com.wavesplatform.dex.settings.OrderFeeSettings._
-import com.wavesplatform.dex.settings.{AssetType, MatcherSettings, OrderFeeSettings, loadConfig}
+import com.wavesplatform.dex.settings.{loadConfig, AssetType, MatcherSettings, OrderFeeSettings}
 import com.wavesplatform.dex.test.matchers.DiffMatcherWithImplicits
 import com.wavesplatform.dex.time.SystemTime
 import com.wavesplatform.dex.waves.WavesFeeConstants
@@ -99,8 +99,12 @@ trait MatcherSpecBase
     ValidatedCommandWithMeta(seqNr.incrementAndGet(), System.currentTimeMillis(), command)
 
   protected def wrapLimitOrder(x: Order): ValidatedCommandWithMeta = wrapLimitOrder(seqNr.incrementAndGet(), x)
-  protected def wrapLimitOrder(n: Long, x: Order): ValidatedCommandWithMeta = wrapCommand(n, ValidatedCommand.PlaceOrder(LimitOrder(x)))
-  protected def wrapMarketOrder(mo: MarketOrder): ValidatedCommandWithMeta = wrapCommand(ValidatedCommand.PlaceMarketOrder(mo))
+
+  protected def wrapLimitOrder(n: Long, x: Order): ValidatedCommandWithMeta =
+    wrapCommand(n, ValidatedCommand.PlaceOrder(LimitOrder(x)))
+
+  protected def wrapMarketOrder(mo: MarketOrder): ValidatedCommandWithMeta =
+    wrapCommand(ValidatedCommand.PlaceMarketOrder(mo))
 
   protected def getSpentAmountWithFee(order: Order): Long = {
     val lo = LimitOrder(order)

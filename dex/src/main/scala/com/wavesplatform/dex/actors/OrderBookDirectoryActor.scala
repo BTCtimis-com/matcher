@@ -169,7 +169,7 @@ class OrderBookDirectoryActor(
 
     case request: ValidatedCommandWithMeta =>
       request.command match {
-        case ValidatedCommand.DeleteOrderBook(assetPair) =>
+        case ValidatedCommand.DeleteOrderBook(assetPair, _) =>
           // autoCreate = false for case, when multiple OrderBookDeleted(A1-A2) events happen one after another
           runFor(request.command.assetPair, autoCreate = false) { (sender, ref) =>
             ref.tell(request, sender)
