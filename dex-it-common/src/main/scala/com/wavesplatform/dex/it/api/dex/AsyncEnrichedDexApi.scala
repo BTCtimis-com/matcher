@@ -9,7 +9,7 @@ import com.wavesplatform.dex.domain.asset.{Asset, AssetPair}
 import com.wavesplatform.dex.domain.bytes.ByteStr
 import com.wavesplatform.dex.domain.bytes.codec.Base58
 import com.wavesplatform.dex.domain.crypto
-import com.wavesplatform.dex.domain.order.{Order}
+import com.wavesplatform.dex.domain.order.Order
 import com.wavesplatform.dex.domain.order.Order.Id
 import com.wavesplatform.dex.it.api._
 import com.wavesplatform.dex.it.api.responses.dex.MatcherError
@@ -22,7 +22,6 @@ import sttp.model.Uri.QuerySegment
 import sttp.model.{MediaType, Uri}
 
 import java.net.InetSocketAddress
-import java.util.UUID
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -42,7 +41,6 @@ class AsyncEnrichedDexApi(apiKey: String, host: => InetSocketAddress)(implicit e
     basicRequest
       .get(uri"$apiUri/matcher/balance/reserved/$publicKey")
       .headers(headers)
-
   }
 
   override def getReservedBalanceWithApiKey(of: KeyPair, xUserPublicKey: Option[PublicKey]): R[HttpBalance] = mk {
@@ -393,7 +391,6 @@ class AsyncEnrichedDexApi(apiKey: String, host: => InetSocketAddress)(implicit e
       .body(Json.stringify(Json.toJson(rate)))
       .contentType(MediaType.ApplicationJson)
       .headers(headers)
-      .tag("requestId", UUID.randomUUID)
   }
 
   override def upsertRate(asset: Asset, rate: String): R[HttpMessage] = mk {
@@ -402,7 +399,6 @@ class AsyncEnrichedDexApi(apiKey: String, host: => InetSocketAddress)(implicit e
       .body(Json.stringify(Json.toJson(rate)))
       .contentType(MediaType.ApplicationJson)
       .headers(apiKeyHeaders)
-      .tag("requestId", UUID.randomUUID)
   }
 
   override def upsertRate(asset: Asset, rate: Double): R[HttpMessage] = upsertRate(asset.toString, rate, apiKeyHeaders)

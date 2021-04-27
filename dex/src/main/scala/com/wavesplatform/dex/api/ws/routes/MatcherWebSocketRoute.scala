@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap
 import akka.actor.typed.Scheduler
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.actor.typed.scaladsl.adapter._
-import akka.actor.{ActorRef, typed}
+import akka.actor.{typed, ActorRef}
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.model.ws.{BinaryMessage, Message, TextMessage}
 import akka.http.scaladsl.server.{Directive0, Route}
@@ -29,6 +29,7 @@ import com.wavesplatform.dex.error.{InvalidJson, MatcherIsStopping}
 import com.wavesplatform.dex.exceptions.BinaryMessagesNotSupportedException
 import com.wavesplatform.dex.model.AssetPairBuilder
 import com.wavesplatform.dex.settings.MatcherSettings
+import com.wavesplatform.dex.tool.KamonTraceUtils.mkTracedRoute
 import com.wavesplatform.dex.time.Time
 import io.swagger.annotations._
 
@@ -67,7 +68,10 @@ class MatcherWebSocketRoute(
 
   override def route: Route = pathPrefix("ws" / "v0") {
     matcherStatusBarrier {
-      internalWsRoute ~ commonWsRoute ~ (pathPrefix("connections") & withAuth)(connectionsRoute ~ closeConnectionsRoute)
+      internalWsRoute ~ commonWsRoute ~ (pathPrefix("connections") & withAuth) {
+        mkTracedRoute("/connectionsRoute")(connectionsRoute) ~
+        mkTracedRoute("/closeConnectionsRoute")(closeConnectionsRoute)
+      }
     }
   }
 

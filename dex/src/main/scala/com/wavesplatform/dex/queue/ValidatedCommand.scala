@@ -7,23 +7,36 @@ import com.wavesplatform.dex.domain.bytes.ByteStr
 import com.wavesplatform.dex.domain.crypto.DigestSize
 import com.wavesplatform.dex.domain.order.Order
 import com.wavesplatform.dex.model.{LimitOrder, MarketOrder}
+import kamon.context.Context
+import com.wavesplatform.dex.tool.KamonTraceUtils.{readCtx, writeCtx}
+import cats.syntax.either._
+import kamon.Kamon
 
 sealed trait ValidatedCommand extends Product with Serializable {
   def assetPair: AssetPair
+  def maybeCtx: Option[Context]
 }
 
 object ValidatedCommand {
 
-  case class PlaceOrder(limitOrder: LimitOrder) extends ValidatedCommand {
+  case class PlaceOrder(limitOrder: LimitOrder, maybeCtx: Option[Context] = Some(Kamon.currentContext())) extends ValidatedCommand {
     override def assetPair: AssetPair = limitOrder.order.assetPair
+    override def toString: String = s"PlaceOrder($limitOrder, $assetPair)"
   }
 
-  case class PlaceMarketOrder(marketOrder: MarketOrder) extends ValidatedCommand {
+  case class PlaceMarketOrder(marketOrder: MarketOrder, maybeCtx: Option[Context] = Some(Kamon.currentContext())) extends ValidatedCommand {
     override def assetPair: AssetPair = marketOrder.order.assetPair
+    override def toString: String = s"PlaceMarketOrder($marketOrder, $assetPair)"
   }
 
-  case class CancelOrder(assetPair: AssetPair, orderId: Order.Id, source: Source) extends ValidatedCommand
-  case class DeleteOrderBook(assetPair: AssetPair) extends ValidatedCommand
+  case class CancelOrder(assetPair: AssetPair, orderId: Order.Id, source: Source, maybeCtx: Option[Context] = Some(Kamon.currentContext()))
+      extends ValidatedCommand {
+    override def toString: String = s"CancelOrder($assetPair, $orderId, $source)"
+  }
+
+  case class DeleteOrderBook(assetPair: AssetPair, maybeCtx: Option[Context] = Some(Kamon.currentContext())) extends ValidatedCommand {
+    override def toString: String = s"DeleteOrderBook($assetPair)"
+  }
 
   implicit final class Ops(val self: ValidatedCommand) extends AnyVal {
 
@@ -36,26 +49,62 @@ object ValidatedCommand {
 
   }
 
-  def toBytes(x: ValidatedCommand): Array[Byte] = x match {
-    case PlaceOrder(lo) => (1: Byte) +: lo.order.version +: lo.order.bytes()
-    case CancelOrder(assetPair, orderId, source) => (2: Byte) +: (assetPair.bytes ++ orderId.arr ++ sourceToBytes(source))
-    case DeleteOrderBook(assetPair) => (3: Byte) +: assetPair.bytes
-    case PlaceMarketOrder(mo) => (4: Byte) +: Array.concat(Longs.toByteArray(mo.availableForSpending), Array(mo.order.version), mo.order.bytes())
+  def toBytes(x: ValidatedCommand): Array[Byte] = {
+    def writeCtxOpt(ctx: Option[Context]): Array[Byte] =
+      ctx.map(writeCtx).getOrElse(Array.emptyByteArray)
+
+    x match {
+      case PlaceOrder(lo, ctx) =>
+        ((1: Byte) +: lo.order.version +: lo.order.bytes()) ++ writeCtxOpt(ctx)
+      case CancelOrder(assetPair, orderId, source, ctx) =>
+        ((2: Byte) +: (assetPair.bytes ++ orderId.arr ++ sourceToBytes(source))) ++ writeCtxOpt(ctx)
+      case DeleteOrderBook(assetPair, ctx) =>
+        ((3: Byte) +: assetPair.bytes) ++ writeCtxOpt(ctx)
+      case PlaceMarketOrder(mo, ctx) =>
+        ((4: Byte) +: Array.concat(Longs.toByteArray(mo.availableForSpending), Array(mo.order.version), mo.order.bytes())) ++
+          writeCtxOpt(ctx)
+    }
   }
 
-  def fromBytes(xs: Array[Byte]): ValidatedCommand = xs.head match {
-    case 1 => PlaceOrder(LimitOrder(Order.fromBytes(xs(1), xs.slice(2, Int.MaxValue))))
-    case 2 =>
-      val bodyBytes = xs.tail
-      val (assetPair, offset1) = AssetPair.fromBytes(bodyBytes)
-      val offset2 = offset1 + DigestSize
-      val orderId = ByteStr(bodyBytes.slice(offset1, offset2))
-      CancelOrder(assetPair, orderId, bytesToSource(bodyBytes.drop(offset2)))
+  def fromBytes(xs: Array[Byte]): ValidatedCommand = {
+    def readCtxOpt(bytes: Array[Byte]): Option[Context] =
+      if (bytes.length > 0)
+        Either.catchNonFatal(readCtx(bytes)).toOption
+      else
+        None
 
-    case 3 => DeleteOrderBook(AssetPair.fromBytes(xs.tail)._1)
-    case 4 =>
-      val afs = Longs.fromByteArray(xs.slice(1, 9)); PlaceMarketOrder(MarketOrder(Order.fromBytes(xs(9), xs.slice(10, Int.MaxValue)), afs))
-    case x => throw new IllegalArgumentException(s"Unknown command type: $x")
+    xs.head match {
+      case 1 =>
+        val bodyBytes = xs.tail
+        val (offset, order) = Order.fromBytes(bodyBytes(0), bodyBytes.slice(1, Int.MaxValue))
+        val remainingBytes = bodyBytes.drop(offset.value)
+        val ctx = readCtxOpt(remainingBytes)
+        PlaceOrder(LimitOrder(order), ctx)
+      case 2 =>
+        val bodyBytes = xs.tail
+        val (assetPair, offset1) = AssetPair.fromBytes(bodyBytes)
+        val offset2 = offset1 + DigestSize
+        val orderId = ByteStr(bodyBytes.slice(offset1, offset2))
+        val source = bytesToSource(bodyBytes.drop(offset2))
+        val remainingBytes = bodyBytes.drop(offset2 + 1)
+        val ctx = readCtxOpt(remainingBytes)
+        CancelOrder(assetPair, orderId, source, ctx)
+      case 3 =>
+        val bodyBytes = xs.tail
+        val (assetPair, offset) = AssetPair.fromBytes(bodyBytes)
+        val remainingBytes = bodyBytes.drop(offset)
+        val ctx = readCtxOpt(remainingBytes)
+        DeleteOrderBook(assetPair, ctx)
+      case 4 =>
+        val bodyBytes = xs.tail
+        val afs = Longs.fromByteArray(bodyBytes.slice(0, 8))
+        val (offset, order) = Order.fromBytes(bodyBytes(8), bodyBytes.slice(9, Int.MaxValue))
+        val remainingBytes = bodyBytes.drop(offset.value)
+        val ctx = readCtxOpt(remainingBytes)
+        PlaceMarketOrder(MarketOrder(order, afs), ctx)
+      case x =>
+        throw new IllegalArgumentException(s"Unknown command type: $x")
+    }
   }
 
   // Pre-allocated
@@ -67,8 +116,7 @@ object ValidatedCommand {
   )
 
   private def bytesToSource(xs: Array[Byte]): Source =
-    if (xs.length > 1) throw new IllegalArgumentException(s"Can't parse Source from array, xs.length = ${xs.length}")
-    else if (xs.isEmpty) Source.NotTracked
+    if (xs.isEmpty) Source.NotTracked
     else
       xs.head match {
         case 1 => Source.Request

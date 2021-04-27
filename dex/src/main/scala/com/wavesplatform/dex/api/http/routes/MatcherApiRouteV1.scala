@@ -13,6 +13,7 @@ import com.wavesplatform.dex.domain.error.ValidationError
 import com.wavesplatform.dex.domain.utils.ScorexLogging
 import com.wavesplatform.dex.error.{ErrorFormatterContext, MatcherError}
 import com.wavesplatform.dex.model.{AssetPairBuilder, MatcherModel}
+import com.wavesplatform.dex.tool.KamonTraceUtils.mkTracedRoute
 import io.swagger.annotations.{Api, ApiImplicitParam, ApiImplicitParams, ApiOperation}
 
 import javax.ws.rs.Path
@@ -34,7 +35,7 @@ case class MatcherApiRouteV1(
 
   override lazy val route: Route = pathPrefix("api" / "v1") {
     matcherStatusBarrier {
-      getOrderBook
+      mkTracedRoute("/getOrderBook")(getOrderBook)
     }
   }
 

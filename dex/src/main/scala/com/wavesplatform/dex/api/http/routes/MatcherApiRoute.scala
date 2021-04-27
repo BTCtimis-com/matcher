@@ -54,6 +54,7 @@ import com.wavesplatform.dex.queue.MatcherQueue.StoreValidatedCommand
 import com.wavesplatform.dex.queue.{ValidatedCommand, ValidatedCommandWithMeta}
 import com.wavesplatform.dex.settings.utils.ConfigOps.ConfigOps
 import com.wavesplatform.dex.settings.{MatcherSettings, OrderFeeSettings}
+import com.wavesplatform.dex.tool.KamonTraceUtils.mkTracedRoute
 import io.swagger.annotations._
 import kamon.Kamon
 import play.api.libs.json._
@@ -136,31 +137,68 @@ class MatcherApiRoute(
     handleExceptions(gRPCExceptionsHandler)(handleRejections(invalidJsonParsingRejectionsHandler)(unprotected))
   }
 
-  private val ratesRoutes: Route = pathPrefix("rates")(getRates ~ protect(upsertRate ~ deleteRate))
-  private val settingsRoutes: Route = pathPrefix("settings")(getSettings ~ ratesRoutes)
-  private val balanceRoutes: Route = pathPrefix("balance")(protect(reservedBalance))
-  private val transactionsRoutes: Route = pathPrefix("transactions")(protect(getOrderTransactions))
+  private val ratesRoutes: Route = pathPrefix("rates") {
+    mkTracedRoute("/getRates")(getRates) ~
+    protect {
+      mkTracedRoute("/upsertRate")(upsertRate) ~
+      mkTracedRoute("/deleteRate")(deleteRate)
+    }
+  }
+
+  private val settingsRoutes: Route = pathPrefix("settings") {
+    mkTracedRoute("/getSettings")(getSettings) ~ ratesRoutes
+  }
+
+  private val balanceRoutes: Route =
+    pathPrefix("balance")(protect(mkTracedRoute("/reservedBalance")(reservedBalance)))
+
+  private val transactionsRoutes: Route =
+    pathPrefix("transactions")(protect(mkTracedRoute("/getOrderTransactions")(getOrderTransactions)))
 
   private val debugRoutes: Route = pathPrefix("debug") {
-    getMatcherStatus ~ getAddressState ~ getMatcherConfig ~ getCurrentOffset ~ getLastOffset ~ getOldestSnapshotOffset ~ getAllSnapshotOffsets ~ protect(
-      saveSnapshots
-    ) ~ print
+    mkTracedRoute("/getMatcherStatus")(getMatcherStatus) ~
+    mkTracedRoute("/getAddressState")(getAddressState) ~
+    mkTracedRoute("/getMatcherConfig")(getMatcherConfig) ~
+    mkTracedRoute("/getCurrentOffset")(getCurrentOffset) ~
+    mkTracedRoute("/getLastOffset")(getLastOffset) ~
+    mkTracedRoute("/getOldestSnapshotOffset")(getOldestSnapshotOffset) ~
+    mkTracedRoute("/getAllSnapshotOffsets")(getAllSnapshotOffsets) ~
+    protect(mkTracedRoute("/saveSnapshots")(saveSnapshots)) ~
+    mkTracedRoute("/print")(print)
   }
 
   private val orderBookRoutes: Route = pathPrefix("orderbook") {
     protect {
-      getOrderBookInfo ~ getOrderStatusInfoByIdWithSignature ~ getOrderBook ~ getOrderBookStatus ~ placeLimitOrder ~
-      placeMarketOrder ~ getOrderHistoryByAssetPairAndPublicKey ~ getOrderHistoryByPublicKey ~ tradableBalance ~
-      orderStatus ~ deleteHistory ~ cancel ~ cancelAll ~ getOrderBooks ~ deleteOrderBook
+      mkTracedRoute("/getOrderBookInfo")(getOrderBookInfo) ~
+      mkTracedRoute("/getOrderStatusInfoByIdWithSignature")(getOrderStatusInfoByIdWithSignature) ~
+      mkTracedRoute("/getOrderBook")(getOrderBook) ~
+      mkTracedRoute("/getOrderBookStatus")(getOrderBookStatus) ~
+      mkTracedRoute("/placeLimitOrder")(placeLimitOrder) ~
+      mkTracedRoute("/placeMarketOrder")(placeMarketOrder) ~
+      mkTracedRoute("/getOrderHistoryByAssetPairAndPublicKey")(getOrderHistoryByAssetPairAndPublicKey) ~
+      mkTracedRoute("/getOrderHistoryByPublicKey")(getOrderHistoryByPublicKey) ~
+      mkTracedRoute("/tradableBalance")(tradableBalance) ~
+      mkTracedRoute("/orderStatus")(orderStatus) ~
+      mkTracedRoute("/deleteHistory")(deleteHistory) ~
+      mkTracedRoute("/cancel")(cancel) ~
+      mkTracedRoute("/cancelAll")(cancelAll) ~
+      mkTracedRoute("/getOrderBooks")(getOrderBooks) ~
+      mkTracedRoute("/deleteOrderBook")(deleteOrderBook)
     }
   }
 
   private val ordersRoutes: Route = pathPrefix("orders") {
-    protect(getOrderHistoryByApiKey ~ getOrderStatusInfoByIdWithApiKey ~ cancelAllByApiKeyAndIds ~ cancelByApi)
+    protect {
+      mkTracedRoute("/getOrderHistoryByApiKey")(getOrderHistoryByApiKey) ~
+      mkTracedRoute("/getOrderStatusInfoByIdWithApiKey")(getOrderStatusInfoByIdWithApiKey) ~
+      mkTracedRoute("/cancelAllByApiKeyAndIds")(cancelAllByApiKeyAndIds) ~
+      mkTracedRoute("/cancelByApi")(cancelByApi)
+    }
   }
 
   override lazy val route: Route = pathPrefix("matcher") {
-    getMatcherPublicKey ~ settingsRoutes ~ debugRoutes ~ orderBookRoutes ~ ordersRoutes ~ balanceRoutes ~ transactionsRoutes
+    mkTracedRoute("/getMatcherPublicKey")(getMatcherPublicKey) ~
+    settingsRoutes ~ debugRoutes ~ orderBookRoutes ~ ordersRoutes ~ balanceRoutes ~ transactionsRoutes
   }
 
   private def unavailableOrderBookBarrier(p: AssetPair): Directive0 = orderBook(p) match {

@@ -38,6 +38,8 @@ import com.wavesplatform.dex.queue.MatcherQueue.StoreValidatedCommand
 import com.wavesplatform.dex.queue.ValidatedCommand
 import com.wavesplatform.dex.remote.Delay
 import com.wavesplatform.dex.time.Time
+import kamon.Kamon
+import kamon.trace.Span
 import org.slf4j.LoggerFactory
 
 import java.time.{Instant, Duration => JDuration}
@@ -70,7 +72,7 @@ class AddressActor(
 
   // We need this because an order's validation is asynchronous and
   //  placing an order may affect following places.
-  private var placementQueue = Queue.empty[Order.Id]
+  private var placementQueue = Queue.empty[EnqueuedOrder]
   private val pendingCommands = MutableMap.empty[Order.Id, PendingCommand]
 
   private val activeOrders = MutableMap.empty[Order.Id, AcceptedOrder]
@@ -289,7 +291,7 @@ class AddressActor(
         sender() ! error.OrderDuplicate(orderId)
       else {
         val shouldProcess = placementQueue.isEmpty
-        placementQueue = placementQueue.enqueue(orderId)
+        placementQueue = placementQueue.enqueue(EnqueuedOrder(orderId, Kamon.currentSpan()))
         pendingCommands.put(orderId, PendingCommand(placeOrder, sender()))
         if (shouldProcess) processNextPlacement()
         else log.trace(s"${placementQueue.headOption} is processing, moving $orderId to the queue")
@@ -380,7 +382,7 @@ class AddressActor(
           }
       }
 
-    case Query.GetCurrentState => sender() ! Reply.GetState(balances, placementQueue)
+    case Query.GetCurrentState => sender() ! Reply.GetState(balances, placementQueue.map(_.orderId))
 
     case Query.GetReservedBalance => sender() ! Reply.GetBalance(balances.reserved.xs)
 
@@ -439,7 +441,7 @@ class AddressActor(
       pendingCommands.remove(orderId).foreach { command =>
         command.client ! reason
         queueEvent match {
-          case ValidatedCommand.PlaceOrder(_) | ValidatedCommand.PlaceMarketOrder(_) =>
+          case ValidatedCommand.PlaceOrder(_, _) | ValidatedCommand.PlaceMarketOrder(_, _) =>
             activeOrders.remove(orderId).foreach { ao =>
               val reservableBalance = ao.reservableBalance
               balances = balances.cancelReservation(PositiveMap(reservableBalance))
@@ -454,7 +456,7 @@ class AddressActor(
 
     case event: ValidationEvent =>
       log.trace(s"$event")
-      placementQueue.dequeueOption.foreach { case (orderId, restQueue) =>
+      placementQueue.dequeueOption.foreach { case (EnqueuedOrder(orderId, _), restQueue) =>
         if (orderId == event.orderId) { // TODO Could this really happen?
           event match {
             case Event.ValidationPassed(ao) => pendingCommands.get(ao.id).foreach(_ => place(ao))
@@ -573,36 +575,40 @@ class AddressActor(
 
   private def isCancelling(id: Order.Id): Boolean = pendingCommands.get(id).exists(_.command.isInstanceOf[Command.CancelOrder])
 
-  private def processNextPlacement(): Unit = placementQueue.dequeueOption.foreach { case (firstOrderId, _) =>
-    pendingCommands.get(firstOrderId) match {
-      case None =>
-        throw new IllegalStateException(
-          s"Can't find command for order $firstOrderId among pending commands: ${pendingCommands.keySet.mkString(", ")}"
-        )
-      case Some(nextCommand) =>
-        nextCommand.command match {
-          case command: Command.PlaceOrder =>
-            val tradableBalances = balances.tradableBalance(Set(command.order.getSpendAssetId, command.order.feeAsset))
-            val ao = command.toAcceptedOrder(tradableBalances.xs)
-            validate(ao, tradableBalances.xs)
-              .map {
-                case Left(error) => Event.ValidationFailed(command.order.id(), error)
-                case Right(_) => Event.ValidationPassed(ao)
-              }
-              .recover {
-                case ex: WavesNodeConnectionLostException =>
-                  log.error("Waves Node connection lost", ex)
-                  Event.ValidationFailed(command.order.id(), WavesNodeConnectionBroken)
-                case ex =>
-                  log.error("An unexpected error occurred", ex)
-                  Event.ValidationFailed(command.order.id(), UnexpectedError)
-              }
-              .pipeTo(self)
+  private def processNextPlacement(): Unit =
+    placementQueue.dequeueOption.foreach { case (EnqueuedOrder(firstOrderId, parentSpan), _) =>
+      val span = Kamon.spanBuilder("processNextPlacement").asChildOf(parentSpan).start()
+      Kamon.runWithSpan(span, finishSpan = true) {
+        pendingCommands.get(firstOrderId) match {
+          case None =>
+            throw new IllegalStateException(
+              s"Can't find command for order $firstOrderId among pending commands: ${pendingCommands.keySet.mkString(", ")}"
+            )
+          case Some(nextCommand) =>
+            nextCommand.command match {
+              case command: Command.PlaceOrder =>
+                val tradableBalances = balances.tradableBalance(Set(command.order.getSpendAssetId, command.order.feeAsset))
+                val ao = command.toAcceptedOrder(tradableBalances.xs)
+                validate(ao, tradableBalances.xs)
+                  .map {
+                    case Left(error) => Event.ValidationFailed(command.order.id(), error)
+                    case Right(_) => Event.ValidationPassed(ao)
+                  }
+                  .recover {
+                    case ex: WavesNodeConnectionLostException =>
+                      log.error("Waves Node connection lost", ex)
+                      Event.ValidationFailed(command.order.id(), WavesNodeConnectionBroken)
+                    case ex =>
+                      log.error("An unexpected error occurred", ex)
+                      Event.ValidationFailed(command.order.id(), UnexpectedError)
+                  }
+                  .pipeTo(self)
 
-          case x => throw new IllegalStateException(s"Can't process $x, only PlaceOrder is allowed")
+              case x => throw new IllegalStateException(s"Can't process $x, only PlaceOrder is allowed")
+            }
         }
+      }
     }
-  }
 
   private def scheduleExpiration(order: Order): Unit = if (!expiration.contains(order.id())) {
     val timeToExpiration = (order.expiration - time.correctedTime()).max(0L)
@@ -669,7 +675,8 @@ class AddressActor(
     )
   }
 
-  private def cancel(o: Order, source: Command.Source): Unit = storeCommand(o.id())(ValidatedCommand.CancelOrder(o.assetPair, o.id(), source))
+  private def cancel(o: Order, source: Command.Source): Unit =
+    storeCommand(o.id())(ValidatedCommand.CancelOrder(o.assetPair, o.id(), source))
 
   private def storeCommand(orderId: Order.Id)(command: ValidatedCommand): Unit =
     store(command)
@@ -771,6 +778,10 @@ object AddressActor {
         val updatedAmount = curr.getOrElse(assetId, 0L) - amount
         Either.cond(updatedAmount >= 0, curr.updated(assetId, updatedAmount), (updatedAmount, assetId))
     }
+
+  case class EnqueuedOrder(orderId: Order.Id, parentSpan: Span) {
+    override def toString: String = orderId.toString
+  }
 
   sealed trait Message
 
