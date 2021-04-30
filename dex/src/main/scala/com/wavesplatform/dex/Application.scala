@@ -41,7 +41,7 @@ import com.wavesplatform.dex.domain.utils.{EitherExt2, LoggerFacade, ScorexLoggi
 import com.wavesplatform.dex.effect.{liftValueAsync, FutureResult}
 import com.wavesplatform.dex.error.ErrorFormatterContext
 import com.wavesplatform.dex.grpc.integration.clients.MatcherExtensionAssetsCachingClient
-import com.wavesplatform.dex.grpc.integration.clients.combined.CombinedWavesBlockchainClient
+import com.wavesplatform.dex.grpc.integration.clients.combined.{AkkaCombinedStream, CombinedWavesBlockchainClient}
 import com.wavesplatform.dex.grpc.integration.clients.domain.AddressBalanceUpdates
 import com.wavesplatform.dex.grpc.integration.dto.BriefAssetDescription
 import com.wavesplatform.dex.history.HistoryRouterActor
@@ -160,7 +160,12 @@ class Application(settings: MatcherSettings, config: Config)(implicit val actorS
       settings.wavesBlockchainClient,
       matcherPublicKey,
       monixScheduler = monixScheduler,
-      grpcExecutionContext = grpcEc
+      grpcExecutionContext = grpcEc,
+      mkCombinedStream = (meClient, buClient) =>
+        new AkkaCombinedStream(
+          buClient.blockchainEvents,
+          meClient.utxEvents
+        )(actorSystem, monixScheduler)
     ),
     assetsCache = assetsCache
   )

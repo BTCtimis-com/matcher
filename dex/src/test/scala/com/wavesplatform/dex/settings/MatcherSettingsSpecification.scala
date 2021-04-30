@@ -13,7 +13,7 @@ import com.wavesplatform.dex.domain.asset.Asset.{IssuedAsset, Waves}
 import com.wavesplatform.dex.domain.asset.AssetPair
 import com.wavesplatform.dex.domain.bytes.ByteStr
 import com.wavesplatform.dex.domain.utils.EitherExt2
-import com.wavesplatform.dex.grpc.integration.clients.combined.{CombinedStream, CombinedWavesBlockchainClient}
+import com.wavesplatform.dex.grpc.integration.clients.combined.{CombinedWavesBlockchainClient, MonixCombinedStream}
 import com.wavesplatform.dex.grpc.integration.clients.domain.portfolio.SynchronizedPessimisticPortfolios
 import com.wavesplatform.dex.grpc.integration.settings.{GrpcClientSettings, WavesBlockchainClientSettings}
 import com.wavesplatform.dex.model.Implicits.AssetPairOps
@@ -79,7 +79,7 @@ class MatcherSettingsSpecification extends BaseSettingsSpecification with Matche
         combinedClientSettings = CombinedWavesBlockchainClient.Settings(
           maxRollbackHeight = 90,
           maxCachedLatestBlockUpdates = 7,
-          combinedStream = CombinedStream.Settings(199.millis),
+          combinedStream = MonixCombinedStream.Settings(199.millis),
           pessimisticPortfolios = SynchronizedPessimisticPortfolios.Settings(400)
         )
       )

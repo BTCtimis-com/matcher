@@ -45,7 +45,8 @@ class CombinedWavesBlockchainClient(
   settings: Settings,
   matcherPublicKey: PublicKey,
   meClient: MatcherExtensionClient,
-  bClient: BlockchainUpdatesClient
+  bClient: BlockchainUpdatesClient,
+  mkCombinedStream: => CombinedStream
 )(implicit ec: ExecutionContext, monixScheduler: Scheduler)
     extends WavesBlockchainClient
     with ScorexLogging {
@@ -74,8 +75,7 @@ class CombinedWavesBlockchainClient(
       val startHeight = math.max(startBlockInfo.height - settings.maxRollbackHeight - 1, 1)
       val init: BlockchainStatus = BlockchainStatus.Normal(WavesChain(Vector.empty, startHeight - 1, settings.maxRollbackHeight + 1))
 
-      val combinedStream = new CombinedStream(settings.combinedStream, bClient.blockchainEvents, meClient.utxEvents)
-
+      val combinedStream = mkCombinedStream
       Observable(dataUpdates, combinedStream.stream)
         .merge
         .mapAccumulate(init) { case (origStatus, event) =>
@@ -131,7 +131,7 @@ class CombinedWavesBlockchainClient(
             changes <- tx.diff.flatMap(_.stateUpdate)
           } yield tx.id.toVanilla -> TransactionWithChanges(tx.id, signedTx, changes)
 
-          blockchainStatus = combinedStream.status()
+          blockchainStatus = combinedStream.currentStatus()
 
           val updates = WavesNodeUpdates(updatedFinalBalances, (unconfirmedTxs ++ confirmedTxs ++ failedTxs).toMap)
           (x.newStatus, (updates, combinedStream.currentProcessedHeight >= startBlockInfo.height))
@@ -250,7 +250,7 @@ object CombinedWavesBlockchainClient extends ScorexLogging {
   case class Settings(
     maxRollbackHeight: Int,
     maxCachedLatestBlockUpdates: Int,
-    combinedStream: CombinedStream.Settings,
+    combinedStream: MonixCombinedStream.Settings,
     pessimisticPortfolios: SynchronizedPessimisticPortfolios.Settings
   )
 
@@ -284,19 +284,79 @@ object CombinedWavesBlockchainClient extends ScorexLogging {
           .build
       )
 
+    val meClient = new MatcherExtensionCachingClient(
+      new MatcherExtensionGrpcAsyncClient(eventLoopGroup, matcherExtensionChannel, monixScheduler)(grpcExecutionContext),
+      wavesBlockchainClientSettings.defaultCachesExpiration
+    )(grpcExecutionContext)
+
+    val bClient = new DefaultBlockchainUpdatesClient(
+      eventLoopGroup,
+      blockchainUpdatesChannel,
+      monixScheduler,
+      wavesBlockchainClientSettings.blockchainUpdatesGrpc.noDataTimeout
+    )(grpcExecutionContext)
+
     new CombinedWavesBlockchainClient(
       wavesBlockchainClientSettings.combinedClientSettings,
       matcherPublicKey,
-      meClient = new MatcherExtensionCachingClient(
-        new MatcherExtensionGrpcAsyncClient(eventLoopGroup, matcherExtensionChannel, monixScheduler)(grpcExecutionContext),
-        wavesBlockchainClientSettings.defaultCachesExpiration
-      )(grpcExecutionContext),
-      bClient = new DefaultBlockchainUpdatesClient(
-        eventLoopGroup,
-        blockchainUpdatesChannel,
-        monixScheduler,
-        wavesBlockchainClientSettings.blockchainUpdatesGrpc.noDataTimeout
-      )(grpcExecutionContext)
+      meClient = meClient,
+      bClient = bClient,
+      mkCombinedStream = new MonixCombinedStream(
+        wavesBlockchainClientSettings.combinedClientSettings.combinedStream,
+        bClient.blockchainEvents,
+        meClient.utxEvents
+      )(monixScheduler)
+    )(grpcExecutionContext, monixScheduler)
+  }
+
+  def apply(
+    wavesBlockchainClientSettings: WavesBlockchainClientSettings,
+    matcherPublicKey: PublicKey,
+    monixScheduler: Scheduler,
+    grpcExecutionContext: ExecutionContext,
+    mkCombinedStream: => (MatcherExtensionClient, BlockchainUpdatesClient) => CombinedStream
+  ): WavesBlockchainClient = {
+
+    val eventLoopGroup = new NioEventLoopGroup
+
+    log.info(s"Building Matcher Extension gRPC client for server: ${wavesBlockchainClientSettings.grpc.target}")
+    val matcherExtensionChannel =
+      wavesBlockchainClientSettings.grpc.toNettyChannelBuilder
+        .executor((command: Runnable) => grpcExecutionContext.execute(command))
+        .eventLoopGroup(eventLoopGroup)
+        .channelType(classOf[NioSocketChannel])
+        .usePlaintext()
+        .build
+
+    log.info(s"Building Blockchain Updates Extension gRPC client for server: ${wavesBlockchainClientSettings.blockchainUpdatesGrpc.target}")
+    val blockchainUpdatesChannel =
+      new RestartableManagedChannel(() =>
+        wavesBlockchainClientSettings.blockchainUpdatesGrpc.toNettyChannelBuilder
+          .executor((command: Runnable) => grpcExecutionContext.execute(command))
+          .eventLoopGroup(eventLoopGroup)
+          .channelType(classOf[NioSocketChannel])
+          .usePlaintext()
+          .build
+      )
+
+    val meClient = new MatcherExtensionCachingClient(
+      new MatcherExtensionGrpcAsyncClient(eventLoopGroup, matcherExtensionChannel, monixScheduler)(grpcExecutionContext),
+      wavesBlockchainClientSettings.defaultCachesExpiration
+    )(grpcExecutionContext)
+
+    val bClient = new DefaultBlockchainUpdatesClient(
+      eventLoopGroup,
+      blockchainUpdatesChannel,
+      monixScheduler,
+      wavesBlockchainClientSettings.blockchainUpdatesGrpc.noDataTimeout
+    )(grpcExecutionContext)
+
+    new CombinedWavesBlockchainClient(
+      wavesBlockchainClientSettings.combinedClientSettings,
+      matcherPublicKey,
+      meClient = meClient,
+      bClient = bClient,
+      mkCombinedStream = mkCombinedStream(meClient, bClient)
     )(grpcExecutionContext, monixScheduler)
   }
 
