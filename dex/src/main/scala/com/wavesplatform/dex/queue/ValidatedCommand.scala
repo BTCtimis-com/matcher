@@ -21,21 +21,24 @@ object ValidatedCommand {
 
   case class PlaceOrder(limitOrder: LimitOrder, maybeCtx: Option[Context] = Some(Kamon.currentContext())) extends ValidatedCommand {
     override def assetPair: AssetPair = limitOrder.order.assetPair
-    override def toString: String = s"PlaceOrder($limitOrder, $assetPair)"
+    override def toString: String = s"PlaceOrder(${limitOrder.order.idStr()})"
   }
 
   case class PlaceMarketOrder(marketOrder: MarketOrder, maybeCtx: Option[Context] = Some(Kamon.currentContext())) extends ValidatedCommand {
     override def assetPair: AssetPair = marketOrder.order.assetPair
-    override def toString: String = s"PlaceMarketOrder($marketOrder, $assetPair)"
+
+    override def toString: String =
+      s"PlaceMarketOrder(${marketOrder.order.idStr()}, k=${marketOrder.order.assetPair.key}, afs=${marketOrder.availableForSpending})"
+
   }
 
   case class CancelOrder(assetPair: AssetPair, orderId: Order.Id, source: Source, maybeCtx: Option[Context] = Some(Kamon.currentContext()))
       extends ValidatedCommand {
-    override def toString: String = s"CancelOrder($assetPair, $orderId, $source)"
+    override def toString: String = s"CancelOrder($orderId, ${assetPair.key}, $source)"
   }
 
   case class DeleteOrderBook(assetPair: AssetPair, maybeCtx: Option[Context] = Some(Kamon.currentContext())) extends ValidatedCommand {
-    override def toString: String = s"DeleteOrderBook($assetPair)"
+    override def toString: String = s"DeleteOrderBook(${assetPair.key})"
   }
 
   implicit final class Ops(val self: ValidatedCommand) extends AnyVal {

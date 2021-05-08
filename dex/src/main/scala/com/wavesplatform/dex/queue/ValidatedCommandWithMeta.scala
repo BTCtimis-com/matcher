@@ -1,19 +1,11 @@
 package com.wavesplatform.dex.queue
 
 import com.google.common.primitives.Longs
-import com.wavesplatform.dex.queue.ValidatedCommand.{CancelOrder, DeleteOrderBook, PlaceMarketOrder, PlaceOrder}
 
 case class ValidatedCommandWithMeta(offset: ValidatedCommandWithMeta.Offset, timestamp: Long, command: ValidatedCommand) {
 
-  override def toString: String = {
-    val eventStr = command match {
-      case PlaceOrder(lo, _) => s"PlaceOrder(${lo.order.idStr()})"
-      case PlaceMarketOrder(mo, _) => s"PlaceMarketOrder(${mo.order.idStr()}, k=${mo.order.assetPair.key}, afs=${mo.availableForSpending})"
-      case CancelOrder(assetPair, id, source, _) => s"CancelOrder($id, ${assetPair.key}, $source)"
-      case DeleteOrderBook(p, _) => s"DeleteOrderBook(${p.key})"
-    }
-    s"ValidatedCommandWithMeta(offset=$offset, ts=$timestamp, $eventStr)"
-  }
+  override def toString: String =
+    s"ValidatedCommandWithMeta(offset=$offset, ts=$timestamp, ${command.toString})"
 
 }
 
