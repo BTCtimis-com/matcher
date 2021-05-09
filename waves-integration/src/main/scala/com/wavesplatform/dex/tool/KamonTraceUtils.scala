@@ -21,12 +21,7 @@ object KamonTraceUtils {
 
   //https://github.com/kamon-io/Kamon/issues/829
   def propagateTraceCtxThroughCachedFuture[A](future: => Future[A])(implicit ec: ExecutionContext): Future[A] = {
-    val span = Kamon.spanBuilder("ignored")
-      .ignoreParentFromContext()
-      .doNotTrackMetrics()
-      .samplingDecision(DoNotSample)
-      .traceId(Kamon.currentSpan().trace.id)
-      .start()
+    val span = mkIgnoredSpan()
     val scope = Kamon.storeContext(Kamon.currentContext().withEntry(Span.Key, span))
 
     try future.transform(
@@ -72,6 +67,14 @@ object KamonTraceUtils {
     val instance = constructor.newInstance().asInstanceOf[A]
     instance
   }
+
+  private def mkIgnoredSpan(): Span =
+    Kamon.spanBuilder("ignored")
+      .ignoreParentFromContext()
+      .doNotTrackMetrics()
+      .samplingDecision(DoNotSample)
+      .traceId(Kamon.currentSpan().trace.id)
+      .start()
 
   private def finishSpanAndContextScope(span: Span, scope: Storage.Scope): Unit = {
     span.finish()
