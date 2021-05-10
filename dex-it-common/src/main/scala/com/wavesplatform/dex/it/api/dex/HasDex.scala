@@ -2,9 +2,8 @@ package com.wavesplatform.dex.it.api.dex
 
 import java.util.Properties
 import java.util.concurrent.ThreadLocalRandom
-
 import cats.Functor
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import com.wavesplatform.dex.it.api.BaseContainersKit
 import com.wavesplatform.dex.it.docker.DexContainer
 import com.wavesplatform.dex.it.fp.CanRepeat
@@ -42,8 +41,12 @@ trait HasDex { self: BaseContainersKit =>
     runConfig: Config = dexRunConfig,
     suiteInitialConfig: Config = dexInitialSuiteConfig,
     image: String = dexImage
-  ): DexContainer =
-    DexContainer(name, networkName, network, getIp(name), runConfig, suiteInitialConfig, localLogsDir, image) unsafeTap addKnownContainer
+  ): DexContainer = {
+    JaegerContainer.createJaegerContainer()
+    val jaegerHost = JaegerContainer.getJaegerHttpUrl()
+    val updatedSuiteInitialConfig = suiteInitialConfig.withValue("kamon.jaeger.http-url", ConfigValueFactory.fromAnyRef(jaegerHost))
+    DexContainer(name, networkName, network, getIp(name), runConfig, updatedSuiteInitialConfig, localLogsDir, image) unsafeTap addKnownContainer
+  }
 
   lazy val dex1: DexContainer = createDex("dex-1")
 

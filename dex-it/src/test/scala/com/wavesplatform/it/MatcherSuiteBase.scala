@@ -75,6 +75,7 @@ trait MatcherSuiteBase
 
   override protected def afterAll(): Unit = {
     log.debug(s"Perform afterAll")
+    Thread.sleep(2000)
     stopBaseContainers()
     super.afterAll()
   }
