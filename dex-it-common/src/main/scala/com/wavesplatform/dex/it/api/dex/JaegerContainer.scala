@@ -24,8 +24,10 @@ object JaegerContainer {
   }
 
   def getJaegerHttpUrl(): String = {
-    val host = InetAddress.getLocalHost.getHostAddress
-    s"http://$host:14268/api/traces"
+    val host = InetAddress.getLocalHost.getHostName
+    val url = s"http://$host:14268/api/traces"
+    println("****************" + url)
+    url
   }
 
 }
