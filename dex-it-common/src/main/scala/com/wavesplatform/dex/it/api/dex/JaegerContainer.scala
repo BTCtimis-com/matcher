@@ -5,7 +5,7 @@ import com.dimafeng.testcontainers.FixedHostPortGenericContainer
 import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy
 import org.testcontainers.utility.TestcontainersConfiguration
 
-import java.net.NetworkInterface
+import java.net.{InetAddress, NetworkInterface}
 import cats.syntax.either._
 
 object JaegerContainer {
@@ -32,14 +32,20 @@ object JaegerContainer {
       .map(x => s"http://$x:14268/api/traces")
       .getOrElse(throw new RuntimeException("can't create jaeger host"))
 
-  private def getHostIp(netInterface: String): Option[String] = Either.catchNonFatal {
-    val inetAddresses = NetworkInterface.getByName(netInterface).getInetAddresses
-    while (inetAddresses.hasMoreElements) {
-      val ia = inetAddresses.nextElement
-      if (!ia.isLinkLocalAddress)
-        return Some(ia.getHostAddress)
-    }
-    None
-  }.toOption.flatten
+  private def getHostIp(netInterface: String): Option[String] = {
+
+    @scala.annotation.tailrec
+    def loop(inetAddresses: java.util.Enumeration[InetAddress]): Option[String] =
+      if (inetAddresses.hasMoreElements) {
+        val ia = inetAddresses.nextElement
+        if (!ia.isLinkLocalAddress)
+          Some(ia.getHostAddress)
+        else
+          loop(inetAddresses)
+      } else None
+
+    Either.catchNonFatal(NetworkInterface.getByName(netInterface).getInetAddresses)
+      .toOption.flatMap(loop)
+  }
 
 }
