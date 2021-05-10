@@ -1,12 +1,10 @@
 package com.wavesplatform.dex.it.api.dex
 
-import cats.data.NonEmptyList
 import com.dimafeng.testcontainers.FixedHostPortGenericContainer
 import org.testcontainers.containers.wait.strategy.LogMessageWaitStrategy
 import org.testcontainers.utility.TestcontainersConfiguration
 
-import java.net.{InetAddress, NetworkInterface}
-import cats.syntax.either._
+import java.net.InetAddress
 
 object JaegerContainer {
 
@@ -25,27 +23,9 @@ object JaegerContainer {
     }.start()
   }
 
-  def getJaegerHttpUrl(): String =
-    NonEmptyList.of("eth0", "enp0s31f6", "en0")
-      .map(getHostIp)
-      .reduceLeft(_ orElse _)
-      .map(x => s"http://$x:14268/api/traces")
-      .getOrElse(throw new RuntimeException("can't create jaeger host"))
-
-  private def getHostIp(netInterface: String): Option[String] = {
-
-    @scala.annotation.tailrec
-    def loop(inetAddresses: java.util.Enumeration[InetAddress]): Option[String] =
-      if (inetAddresses.hasMoreElements) {
-        val ia = inetAddresses.nextElement
-        if (!ia.isLinkLocalAddress)
-          Some(ia.getHostAddress)
-        else
-          loop(inetAddresses)
-      } else None
-
-    Either.catchNonFatal(NetworkInterface.getByName(netInterface).getInetAddresses)
-      .toOption.flatMap(loop)
+  def getJaegerHttpUrl(): String = {
+    val host = InetAddress.getLocalHost.getHostAddress
+    s"http://$host:14268/api/traces"
   }
 
 }
