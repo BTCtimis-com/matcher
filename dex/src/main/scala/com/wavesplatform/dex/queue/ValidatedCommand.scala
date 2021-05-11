@@ -79,8 +79,8 @@ object ValidatedCommand {
       case 1 =>
         val bodyBytes = xs.tail
         val (offset, order) = Order.fromBytes(bodyBytes(0), bodyBytes.slice(1, Int.MaxValue))
-        val remainingLen = offset.value + 1
-        val remainingBytes = bodyBytes.drop(remainingLen)
+        val consumedBytesLen = offset.value + 1
+        val remainingBytes = bodyBytes.drop(consumedBytesLen)
         val ctx = readCtxOpt(remainingBytes)
         PlaceOrder(LimitOrder(order), ctx)
       case 2 =>
@@ -102,8 +102,8 @@ object ValidatedCommand {
         val bodyBytes = xs.tail
         val afs = Longs.fromByteArray(bodyBytes.slice(0, 8))
         val (offset, order) = Order.fromBytes(bodyBytes(8), bodyBytes.slice(9, Int.MaxValue))
-        val remainingLen = offset.value + 1
-        val remainingBytes = bodyBytes.drop(8 + remainingLen)
+        val consumedBytesLen = offset.value + 1
+        val remainingBytes = bodyBytes.drop(8 + consumedBytesLen)
         val ctx = readCtxOpt(remainingBytes)
         PlaceMarketOrder(MarketOrder(order, afs), ctx)
       case x =>
