@@ -1,5 +1,6 @@
 package com.wavesplatform.dex.queue
 
+import cats.syntax.either._
 import com.google.common.primitives.Longs
 import com.wavesplatform.dex.actors.address.AddressActor.Command.Source
 import com.wavesplatform.dex.domain.asset.{Asset, AssetPair}
@@ -7,10 +8,9 @@ import com.wavesplatform.dex.domain.bytes.ByteStr
 import com.wavesplatform.dex.domain.crypto.DigestSize
 import com.wavesplatform.dex.domain.order.Order
 import com.wavesplatform.dex.model.{LimitOrder, MarketOrder}
-import kamon.context.Context
 import com.wavesplatform.dex.tool.KamonTraceUtils.{readCtx, writeCtx}
-import cats.syntax.either._
 import kamon.Kamon
+import kamon.context.Context
 
 sealed trait ValidatedCommand extends Product with Serializable {
   def assetPair: AssetPair
@@ -58,14 +58,13 @@ object ValidatedCommand {
 
     x match {
       case PlaceOrder(lo, ctx) =>
-        ((1: Byte) +: lo.order.version +: lo.order.bytes()) ++ writeCtxOpt(ctx)
+        (1: Byte) +: Array.concat(Array(lo.order.version), lo.order.bytes(), writeCtxOpt(ctx))
       case CancelOrder(assetPair, orderId, source, ctx) =>
-        ((2: Byte) +: (assetPair.bytes ++ orderId.arr ++ sourceToBytes(source))) ++ writeCtxOpt(ctx)
+        (2: Byte) +: Array.concat(assetPair.bytes, orderId.arr, sourceToBytes(source), writeCtxOpt(ctx))
       case DeleteOrderBook(assetPair, ctx) =>
-        ((3: Byte) +: assetPair.bytes) ++ writeCtxOpt(ctx)
+        (3: Byte) +: Array.concat(assetPair.bytes, writeCtxOpt(ctx))
       case PlaceMarketOrder(mo, ctx) =>
-        ((4: Byte) +: Array.concat(Longs.toByteArray(mo.availableForSpending), Array(mo.order.version), mo.order.bytes())) ++
-          writeCtxOpt(ctx)
+        (4: Byte) +: Array.concat(Longs.toByteArray(mo.availableForSpending), Array(mo.order.version), mo.order.bytes(), writeCtxOpt(ctx))
     }
   }
 
@@ -80,7 +79,8 @@ object ValidatedCommand {
       case 1 =>
         val bodyBytes = xs.tail
         val (offset, order) = Order.fromBytes(bodyBytes(0), bodyBytes.slice(1, Int.MaxValue))
-        val remainingBytes = bodyBytes.drop(offset.value)
+        val remainingLen = offset.value + 1
+        val remainingBytes = bodyBytes.drop(remainingLen)
         val ctx = readCtxOpt(remainingBytes)
         PlaceOrder(LimitOrder(order), ctx)
       case 2 =>
@@ -102,7 +102,8 @@ object ValidatedCommand {
         val bodyBytes = xs.tail
         val afs = Longs.fromByteArray(bodyBytes.slice(0, 8))
         val (offset, order) = Order.fromBytes(bodyBytes(8), bodyBytes.slice(9, Int.MaxValue))
-        val remainingBytes = bodyBytes.drop(offset.value)
+        val remainingLen = offset.value + 1
+        val remainingBytes = bodyBytes.drop(8 + remainingLen)
         val ctx = readCtxOpt(remainingBytes)
         PlaceMarketOrder(MarketOrder(order, afs), ctx)
       case x =>
