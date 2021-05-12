@@ -103,8 +103,6 @@ class Application(settings: MatcherSettings, config: Config)(implicit val actorS
   private val orderBooks = new AtomicReference(Map.empty[AssetPair, Either[Unit, ActorRef]])
   private val snapshotsRestored = Promise[ValidatedCommandWithMeta.Offset]() // Earliest offset among snapshots
 
-  private val wavesLifted: FutureResult[BriefAssetDescription] = liftValueAsync(BriefAssetDescription.wavesDescription)
-
   private val time = new NTP(settings.ntpServer)
   cs.addTask(CoordinatedShutdown.PhaseActorSystemTerminate, "NTP") { () =>
     Future { blocking(time.close()); Done }
@@ -495,16 +493,20 @@ class Application(settings: MatcherSettings, config: Config)(implicit val actorS
             }
 
             validatedCommandWithMeta.command.maybeCtx.fold(handleValidatedCommandWithMeta) { ctx =>
-              val parentSpan = ctx.get(kamon.trace.Span.Key)
-              val span =
-                Kamon.spanBuilder(s"ConsumedValidatedCommandWithMeta")
-                  .asChildOf(parentSpan)
-                  .traceId(parentSpan.trace.id)
-                  .tag(ctx.tags)
-                  .samplingDecision(KamonTraceUtils.Sample)
-                  .doNotTrackMetrics()
-                  .start()
-              Kamon.runWithSpan[AssetPair](span, finishSpan = true)(handleValidatedCommandWithMeta)
+              val isApplicationStarted = startGuard.value.exists(_.isSuccess)
+              if (isApplicationStarted) {
+                val parentSpan = ctx.get(kamon.trace.Span.Key)
+                val span =
+                  Kamon.spanBuilder(s"ConsumedValidatedCommandWithMeta")
+                    .asChildOf(parentSpan)
+                    .traceId(parentSpan.trace.id)
+                    .tag(ctx.tags)
+                    .samplingDecision(KamonTraceUtils.Sample)
+                    .doNotTrackMetrics()
+                    .start()
+                Kamon.runWithSpan[AssetPair](span, finishSpan = true)(handleValidatedCommandWithMeta)
+              } else
+                handleValidatedCommandWithMeta
             }
           }
           .to(Set)
@@ -551,7 +553,7 @@ class Application(settings: MatcherSettings, config: Config)(implicit val actorS
 
   private def getAndCacheDescription(asset: Asset): FutureResult[BriefAssetDescription] =
     asset match {
-      case Asset.Waves => wavesLifted
+      case Asset.Waves => liftValueAsync(BriefAssetDescription.wavesDescription)
       case asset: Asset.IssuedAsset =>
         EitherT(wavesBlockchainAsyncClient.assetDescription(asset).map {
           case Some(x) => x.asRight
