@@ -133,7 +133,12 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
           "no recovery" in {
             val t = mkEventuallyWorking()
             t.blockchainUpdates.close()
-            t.cs.lastStatus.futureValue should matchTo[Status](Status.Closing(blockchainUpdates = true, utxEvents = true))
+            eventually {
+              t.cs.currentStatus should matchTo[Status](Status.Closing(
+                blockchainUpdates = true,
+                utxEvents = true
+              ))
+            }
           }
         }
       }
@@ -170,7 +175,12 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
           "no recovery" in {
             val t = mkEventuallyWorking()
             t.utxEvents.close()
-            t.cs.lastStatus.futureValue should matchTo[Status](Status.Closing(blockchainUpdates = true, utxEvents = true))
+            eventually {
+              t.cs.currentStatus should matchTo[Status](Status.Closing(
+                blockchainUpdates = true,
+                utxEvents = true
+              ))
+            }
           }
         }
       }
@@ -180,8 +190,8 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
   private def mk(): TestClasses = {
     val blockchainUpdates = new BlockchainUpdatesControlledStreamMock
     val utxEvents = new UtxEventsControlledStreamMock
-    val cs = new CombinedStream(
-      CombinedStream.Settings(restartDelay = 10.millis),
+    val cs = new MonixCombinedStream(
+      MonixCombinedStream.Settings(restartDelay = 10.millis),
       blockchainUpdates = blockchainUpdates,
       utxEvents = utxEvents
     )
@@ -191,7 +201,7 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
   private def mkEventuallyWorking(): TestClasses = mk().tap { x =>
     x.utxEvents.systemStream.onNext(SystemEvent.BecameReady)
     eventually {
-      x.cs.blockchainStatus shouldBe Status.Working
+      x.cs.currentStatus shouldBe Status.Working
     }
   }
 

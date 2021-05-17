@@ -10,7 +10,8 @@ trait CombinedStream {
   def startFrom(height: Int): Unit
   def restart(): Unit
 
-  def currentStatus(): Status
+  def currentStatus: Status
+
   def updateProcessedHeight(height: Int): Unit
   def currentProcessedHeight: Int
 

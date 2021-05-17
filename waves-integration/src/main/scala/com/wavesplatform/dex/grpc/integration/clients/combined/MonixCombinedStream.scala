@@ -70,7 +70,7 @@ class MonixCombinedStream(
 
   @volatile private var blockchainStatus: Status = Status.Starting()
 
-  override def currentStatus(): Status = blockchainStatus
+  override def currentStatus: Status = blockchainStatus
 
   mergedEvents
     .foldLeft[Status](Status.Starting()) {

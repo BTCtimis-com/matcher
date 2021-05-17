@@ -331,7 +331,7 @@ class AkkaCombinedStream(blockchainUpdates: BlockchainUpdatesControlledStream, u
 
   override def restart(): Unit = ref ! CombinedStreamActor.Command.Restart
 
-  override def currentStatus(): CombinedStream.Status = lastStatus
+  override def currentStatus: CombinedStream.Status = lastStatus
 
   override def updateProcessedHeight(height: Int): Unit = ref ! CombinedStreamActor.Command.UpdateProcessedHeight(height)
 

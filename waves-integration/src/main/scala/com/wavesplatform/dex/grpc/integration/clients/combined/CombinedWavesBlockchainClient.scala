@@ -131,7 +131,7 @@ class CombinedWavesBlockchainClient(
             changes <- tx.diff.flatMap(_.stateUpdate)
           } yield tx.id.toVanilla -> TransactionWithChanges(tx.id, signedTx, changes)
 
-          blockchainStatus = combinedStream.currentStatus()
+          blockchainStatus = combinedStream.currentStatus
 
           val updates = WavesNodeUpdates(updatedFinalBalances, (unconfirmedTxs ++ confirmedTxs ++ failedTxs).toMap)
           (x.newStatus, (updates, combinedStream.currentProcessedHeight >= startBlockInfo.height))
