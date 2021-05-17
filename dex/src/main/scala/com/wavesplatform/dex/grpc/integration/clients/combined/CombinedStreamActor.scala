@@ -117,11 +117,13 @@ object CombinedStreamActor {
       }
 
       def closed: Behavior[Command] = {
+        context.log.info("1. Status now is Closed")
         status.onNext(Status.Closing(blockchainUpdates = true, utxEvents = true))
         Behaviors.receiveMessage[Command](x => logAndIgnore(s"Unexpected $x"))
       }
 
       def closing(utxEventsClosed: Boolean, blockchainUpdatesClosed: Boolean): Behavior[Command] = {
+        context.log.info(s"2. Status now is Closing(utx=$utxEventsClosed, bu=$blockchainUpdatesClosed)")
         status.onNext(Status.Closing(blockchainUpdates = blockchainUpdatesClosed, utxEvents = utxEventsClosed))
         Behaviors.receiveMessage[Command] {
           case Command.ProcessUtxSystemEvent(SystemEvent.Closed) =>
@@ -159,25 +161,34 @@ object CombinedStreamActor {
           Behaviors.same
       }
 
-      def startWithRollback(): Behavior[Command] = {
-        context.log.info("Now is restarting")
-
-        output.onNext(WavesNodeEvent.RolledBack(WavesNodeEvent.RolledBack.To.Height(processedHeight.decrementAndGet())))
-        context.scheduleOnce(1.second, context.self, Command.Continue)
-
-        // Quiet period
-        Behaviors.receiveMessage[Command] {
-          partial {
-            case Command.Continue =>
-              utxEvents.start()
-              starting(utxEventsStarted = false, blockchainUpdatesStarted = false)
-          }
-            .orElse(onClosedOrRestart)
-            .toTotal(ignore)
+      val quiet = Behaviors.receiveMessage[Command] {
+        partial {
+          case Command.Continue =>
+            utxEvents.start()
+            starting(utxEventsStarted = false, blockchainUpdatesStarted = false)
         }
+          .orElse(onClosedOrRestart)
+          .toTotal(ignore)
+      }
+
+      def wait(): Behavior[Command] = {
+        context.scheduleOnce(1.second, context.self, Command.Continue)
+        quiet
+      }
+
+      def startWithRollback(): Behavior[Command] = {
+        context.log.info("3. Now is StartingWithRollback")
+        output.onNext(WavesNodeEvent.RolledBack(WavesNodeEvent.RolledBack.To.Height(processedHeight.decrementAndGet())))
+        wait()
+      }
+
+      def startWithoutRollback(): Behavior[Command] = {
+        context.log.info("4. Now is StartingWithoutRollback")
+        wait()
       }
 
       def starting(utxEventsStarted: Boolean, blockchainUpdatesStarted: Boolean): Behavior[Command] = {
+        context.log.info(s"4. Now is Starting(utx=$utxEventsStarted, bu=$blockchainUpdatesStarted)")
         status.onNext(Status.Starting(blockchainUpdates = blockchainUpdatesStarted, utxEvents = utxEventsStarted))
         Behaviors.withStash[Command](Int.MaxValue) { stash =>
           Behaviors.receiveMessagePartial[Command] {
@@ -201,12 +212,10 @@ object CombinedStreamActor {
                 // We don't need to stop blockchain updates, because we start it
                 // only after receiving SystemEvent.BecameReady from UTX Stream
                 stash.clear()
-                utxEvents.start()
-                starting(utxEventsStarted = false, blockchainUpdatesStarted)
+                startWithoutRollback()
 
               case Command.ProcessBlockchainUpdatesSystemEvent(SystemEvent.Stopped) =>
                 utxEvents.stop()
-                context.log.info("Stopping")
                 stopping(utxEventsStopped = false, blockchainUpdatesStopped = true)
 
               case cmd @ (Command.ProcessUtxEvent(_) | Command.ProcessBlockchainUpdatesEvent(_)) =>
@@ -218,19 +227,18 @@ object CombinedStreamActor {
       }
 
       def working: Behavior[Command] = {
+        context.log.info("5. Status now is Working")
         status.onNext(Status.Working)
         Behaviors.receiveMessagePartial[Command] {
           partial {
             case Command.ProcessUtxSystemEvent(SystemEvent.Stopped) =>
               // See Starting + Stopped
               blockchainUpdates.stop()
-              context.log.info("Stopping")
               stopping(utxEventsStopped = true, blockchainUpdatesStopped = false)
 
             case Command.ProcessBlockchainUpdatesSystemEvent(SystemEvent.Stopped) =>
               // See utxEventsTransitions: Starting + Stopped
               utxEvents.stop()
-              context.log.info("Stopping")
               stopping(utxEventsStopped = false, blockchainUpdatesStopped = true)
 
             case Command.ProcessUtxEvent(evt) =>
@@ -256,10 +264,7 @@ object CombinedStreamActor {
         }
       }
 
-      def becomeWorking(stash: StashBuffer[Command]): Behavior[Command] = {
-        context.log.info("Now is working")
-        stash.unstashAll(working)
-      }
+      def becomeWorking(stash: StashBuffer[Command]): Behavior[Command] = stash.unstashAll(working)
 
       def stopping(utxEventsStopped: Boolean, blockchainUpdatesStopped: Boolean): Behavior[Command] = {
         status.onNext(Status.Stopping(blockchainUpdates = blockchainUpdatesStopped, utxEvents = utxEventsStopped))
