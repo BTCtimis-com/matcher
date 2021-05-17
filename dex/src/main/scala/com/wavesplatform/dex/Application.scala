@@ -163,6 +163,7 @@ class Application(settings: MatcherSettings, config: Config)(implicit val actorS
       grpcExecutionContext = grpcEc,
       mkCombinedStream = (meClient, buClient) =>
         new AkkaCombinedStream(
+          settings.wavesBlockchainClient.combinedClientSettings.combinedStream,
           buClient.blockchainEvents,
           meClient.utxEvents
         )(actorSystem, monixScheduler)

@@ -7,7 +7,7 @@ import akka.actor.typed.scaladsl.{Behaviors, StashBuffer}
 import akka.actor.typed.{Behavior, BehaviorInterceptor, TypedActorContext}
 import com.wavesplatform.dex.grpc.integration.clients.ControlledStream.SystemEvent
 import com.wavesplatform.dex.grpc.integration.clients.blockchainupdates.{BlockchainUpdatesControlledStream, BlockchainUpdatesConversions}
-import com.wavesplatform.dex.grpc.integration.clients.combined.CombinedStream.Status
+import com.wavesplatform.dex.grpc.integration.clients.combined.CombinedStream.{Settings, Status}
 import com.wavesplatform.dex.grpc.integration.clients.combined.CombinedStreamActor.CustomLoggerBehaviorInterceptor.LogMessageTemplate
 import com.wavesplatform.dex.grpc.integration.clients.domain.WavesNodeEvent
 import com.wavesplatform.dex.grpc.integration.clients.matcherext.{UtxEventConversions, UtxEventsControlledStream}
@@ -21,7 +21,6 @@ import org.slf4j.Logger
 import org.slf4j.event.Level
 
 import java.util.concurrent.atomic.AtomicInteger
-import scala.concurrent.duration.DurationInt
 import scala.reflect.ClassTag
 
 // TODO move to Actors?
@@ -87,6 +86,7 @@ object CombinedStreamActor {
   }
 
   def apply(
+    settings: Settings,
     processedHeight: AtomicInteger,
     blockchainUpdates: BlockchainUpdatesControlledStream,
     utxEvents: UtxEventsControlledStream,
@@ -161,7 +161,7 @@ object CombinedStreamActor {
           Behaviors.same
       }
 
-      val quiet = Behaviors.receiveMessage[Command] {
+      def quiet: Behavior[Command] = Behaviors.receiveMessage[Command] {
         partial {
           case Command.Continue =>
             utxEvents.start()
@@ -172,7 +172,7 @@ object CombinedStreamActor {
       }
 
       def wait(): Behavior[Command] = {
-        context.scheduleOnce(1.second, context.self, Command.Continue)
+        context.scheduleOnce(settings.restartDelay, context.self, Command.Continue)
         quiet
       }
 
@@ -314,7 +314,7 @@ object CombinedStreamActor {
 
 }
 
-class AkkaCombinedStream(blockchainUpdates: BlockchainUpdatesControlledStream, utxEvents: UtxEventsControlledStream)(implicit
+class AkkaCombinedStream(settings: Settings, blockchainUpdates: BlockchainUpdatesControlledStream, utxEvents: UtxEventsControlledStream)(implicit
   system: ActorSystem,
   monixScheduler: Scheduler
 ) extends CombinedStream {
@@ -328,7 +328,7 @@ class AkkaCombinedStream(blockchainUpdates: BlockchainUpdatesControlledStream, u
   private val outputStream = ConcurrentSubject.publish[WavesNodeEvent]
 
   private val ref = system.spawn(
-    CombinedStreamActor(processedHeight, blockchainUpdates, utxEvents, statusStream, outputStream),
+    CombinedStreamActor(settings, processedHeight, blockchainUpdates, utxEvents, statusStream, outputStream),
     "combined-stream"
   )
 

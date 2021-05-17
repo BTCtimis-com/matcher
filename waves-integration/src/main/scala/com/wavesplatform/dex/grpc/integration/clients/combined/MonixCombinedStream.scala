@@ -4,8 +4,7 @@ import cats.syntax.either._
 import com.wavesplatform.dex.domain.utils.ScorexLogging
 import com.wavesplatform.dex.grpc.integration.clients.ControlledStream.SystemEvent
 import com.wavesplatform.dex.grpc.integration.clients.blockchainupdates.{BlockchainUpdatesControlledStream, BlockchainUpdatesConversions}
-import com.wavesplatform.dex.grpc.integration.clients.combined.CombinedStream.Status
-import com.wavesplatform.dex.grpc.integration.clients.combined.MonixCombinedStream.Settings
+import com.wavesplatform.dex.grpc.integration.clients.combined.CombinedStream.{Settings, Status}
 import com.wavesplatform.dex.grpc.integration.clients.domain.WavesNodeEvent
 import com.wavesplatform.dex.grpc.integration.clients.matcherext.{UtxEventConversions, UtxEventsControlledStream}
 import monix.eval.Task
@@ -13,7 +12,6 @@ import monix.execution.{Ack, Scheduler}
 import monix.reactive.Observable
 import monix.reactive.subjects.ConcurrentSubject
 
-import scala.concurrent.duration.FiniteDuration
 import scala.util.Failure
 import scala.util.chaining._
 
@@ -306,8 +304,4 @@ class MonixCombinedStream(
     mergedEvents.onComplete()
   }
 
-}
-
-object MonixCombinedStream {
-  case class Settings(restartDelay: FiniteDuration)
 }

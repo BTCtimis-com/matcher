@@ -6,6 +6,8 @@ import com.wavesplatform.dex.meta.getSimpleName
 import monix.reactive.Observable
 import play.api.libs.json.{Format, Reads, Writes}
 
+import scala.concurrent.duration.FiniteDuration
+
 trait CombinedStream {
   def startFrom(height: Int): Unit
   def restart(): Unit
@@ -52,5 +54,7 @@ object CombinedStream {
     }
 
   }
+
+  case class Settings(restartDelay: FiniteDuration)
 
 }

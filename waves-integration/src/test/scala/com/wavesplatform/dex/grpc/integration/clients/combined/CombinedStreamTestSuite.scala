@@ -200,7 +200,7 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
     val blockchainUpdates = new BlockchainUpdatesControlledStreamMock
     val utxEvents = new UtxEventsControlledStreamMock
     val cs = new MonixCombinedStream(
-      MonixCombinedStream.Settings(restartDelay = 10.millis),
+      CombinedStream.Settings(restartDelay = 10.millis),
       blockchainUpdates = blockchainUpdates,
       utxEvents = utxEvents
     )

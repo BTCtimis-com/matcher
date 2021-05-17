@@ -22,7 +22,7 @@ import com.wavesplatform.dex.grpc.integration.clients.domain.StatusUpdate.LastBl
 import com.wavesplatform.dex.grpc.integration.clients.domain._
 import com.wavesplatform.dex.grpc.integration.clients.domain.portfolio.SynchronizedPessimisticPortfolios
 import com.wavesplatform.dex.grpc.integration.clients.matcherext.{MatcherExtensionCachingClient, MatcherExtensionClient, MatcherExtensionGrpcAsyncClient}
-import com.wavesplatform.dex.grpc.integration.clients.{BroadcastResult, CheckedBroadcastResult, RunScriptResult, WavesBlockchainClient}
+import com.wavesplatform.dex.grpc.integration.clients._
 import com.wavesplatform.dex.grpc.integration.dto.BriefAssetDescription
 import com.wavesplatform.dex.grpc.integration.protobuf.DexToPbConversions._
 import com.wavesplatform.dex.grpc.integration.protobuf.PbToDexConversions._
@@ -250,7 +250,7 @@ object CombinedWavesBlockchainClient extends ScorexLogging {
   case class Settings(
     maxRollbackHeight: Int,
     maxCachedLatestBlockUpdates: Int,
-    combinedStream: MonixCombinedStream.Settings,
+    combinedStream: combined.CombinedStream.Settings,
     pessimisticPortfolios: SynchronizedPessimisticPortfolios.Settings
   )
 
