@@ -105,7 +105,11 @@ object CombinedStreamActor {
         logger = context.log,
         enabled = true,
         level = Level.DEBUG,
-        formatter = _.toString
+        formatter = {
+          case _: Command.ProcessBlockchainUpdatesEvent => "ProcessBlockchainUpdatesEvent"
+          case x @ (_: Command.Start | _: Command.UpdateProcessedHeight | Command.Restart | Command.Continue | _: Command.ProcessUtxSystemEvent |
+              _: Command.ProcessBlockchainUpdatesSystemEvent) => x.toString
+        }
       ))
     ) {
       val ignore: Command => Behavior[Command] = _ => Behaviors.same
@@ -117,13 +121,13 @@ object CombinedStreamActor {
       }
 
       def closed: Behavior[Command] = {
-        context.log.info("1. Status now is Closed")
+        context.log.info("Now is Closed")
         status.onNext(Status.Closing(blockchainUpdates = true, utxEvents = true))
         Behaviors.receiveMessage[Command](x => logAndIgnore(s"Unexpected $x"))
       }
 
       def closing(utxEventsClosed: Boolean, blockchainUpdatesClosed: Boolean): Behavior[Command] = {
-        context.log.info(s"2. Status now is Closing(utx=$utxEventsClosed, bu=$blockchainUpdatesClosed)")
+        context.log.info(s"Now is Closing(utx=$utxEventsClosed, bu=$blockchainUpdatesClosed)")
         status.onNext(Status.Closing(blockchainUpdates = blockchainUpdatesClosed, utxEvents = utxEventsClosed))
         Behaviors.receiveMessage[Command] {
           case Command.ProcessUtxSystemEvent(SystemEvent.Closed) =>
@@ -177,18 +181,18 @@ object CombinedStreamActor {
       }
 
       def startWithRollback(): Behavior[Command] = {
-        context.log.info("3. Now is StartingWithRollback")
+        context.log.info("Now is StartingWithRollback")
         output.onNext(WavesNodeEvent.RolledBack(WavesNodeEvent.RolledBack.To.Height(processedHeight.decrementAndGet())))
         wait()
       }
 
       def startWithoutRollback(): Behavior[Command] = {
-        context.log.info("4. Now is StartingWithoutRollback")
+        context.log.info("Now is StartingWithoutRollback")
         wait()
       }
 
       def starting(utxEventsStarted: Boolean, blockchainUpdatesStarted: Boolean): Behavior[Command] = {
-        context.log.info(s"4. Now is Starting(utx=$utxEventsStarted, bu=$blockchainUpdatesStarted)")
+        context.log.info(s"Now is Starting(utx=$utxEventsStarted, bu=$blockchainUpdatesStarted)")
         status.onNext(Status.Starting(blockchainUpdates = blockchainUpdatesStarted, utxEvents = utxEventsStarted))
         Behaviors.withStash[Command](Int.MaxValue) { stash =>
           Behaviors.receiveMessagePartial[Command] {
@@ -227,7 +231,7 @@ object CombinedStreamActor {
       }
 
       def working: Behavior[Command] = {
-        context.log.info("5. Status now is Working")
+        context.log.info("Now is Working")
         status.onNext(Status.Working)
         Behaviors.receiveMessagePartial[Command] {
           partial {
@@ -267,6 +271,7 @@ object CombinedStreamActor {
       def becomeWorking(stash: StashBuffer[Command]): Behavior[Command] = stash.unstashAll(working)
 
       def stopping(utxEventsStopped: Boolean, blockchainUpdatesStopped: Boolean): Behavior[Command] = {
+        context.log.info(s"Now is Stopping(utx=$utxEventsStopped, bu=$blockchainUpdatesStopped)")
         status.onNext(Status.Stopping(blockchainUpdates = blockchainUpdatesStopped, utxEvents = utxEventsStopped))
         Behaviors.receiveMessagePartial[Command] {
           partial {
