@@ -106,7 +106,6 @@ object CombinedStreamActor {
         enabled = true,
         level = Level.DEBUG,
         formatter = {
-          case _: Command.ProcessBlockchainUpdatesEvent => "ProcessBlockchainUpdatesEvent"
           case x @ (_: Command.Start | _: Command.UpdateProcessedHeight | Command.Restart | Command.Continue | _: Command.ProcessUtxSystemEvent |
               _: Command.ProcessBlockchainUpdatesSystemEvent) => x.toString
         }

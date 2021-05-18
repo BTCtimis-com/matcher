@@ -112,11 +112,9 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
             logged(t.utxEvents.systemStream)(_.contains(SystemEvent.Stopped))
           }
 
-          "both recovered" in {
+          "eventually recovered" in {
             val t = mkEventuallyWorking()
             t.blockchainUpdates.systemStream.onNext(SystemEvent.Stopped)
-
-            // It takes some time
             eventually {
               t.cs.currentStatus should matchTo[Status](Status.Working)
             }
@@ -157,11 +155,16 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
             logged(t.blockchainUpdates.systemStream)(_.contains(SystemEvent.Stopped))
           }
 
-          "recovery started" in {
+          "eventually recovered" in {
             val t = mkEventuallyWorking()
             t.utxEvents.systemStream.onNext(SystemEvent.Stopped)
-            logged(t.utxEvents.systemStream)(_.last shouldBe SystemEvent.BecameReady)
-            logged(t.blockchainUpdates.systemStream)(_.last shouldBe SystemEvent.BecameReady)
+
+            logged(t.utxEvents.systemStream)(_ should matchTo(List[SystemEvent](SystemEvent.BecameReady, SystemEvent.Stopped, SystemEvent.BecameReady)))
+            logged(t.blockchainUpdates.systemStream)(_ should matchTo(List[SystemEvent](SystemEvent.BecameReady, SystemEvent.Stopped, SystemEvent.BecameReady)))
+
+            eventually {
+              t.cs.currentStatus should matchTo[Status](Status.Working)
+            }
           }
         }
 
