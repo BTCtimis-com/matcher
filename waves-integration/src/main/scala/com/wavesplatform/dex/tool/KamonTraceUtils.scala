@@ -6,6 +6,7 @@ import kamon.Kamon
 import kamon.context.{BinaryPropagation, Context, Storage}
 import kamon.trace.Span
 import kamon.trace.Trace.SamplingDecision
+import kamon.trace.Tracer.PreFinishHook
 
 import java.io.ByteArrayOutputStream
 import scala.concurrent.{ExecutionContext, Future}
@@ -102,6 +103,14 @@ object KamonTraceUtils {
     span.fail(throwable.getMessage, throwable)
     span.finish()
     scope.close()
+  }
+
+  final class FilteringRejectedHook extends PreFinishHook {
+
+    override def beforeFinish(span: Span): Unit =
+      if (span.operationName() == "/rejected")
+        span.trace.drop()
+
   }
 
 }
