@@ -15,6 +15,7 @@ import io.grpc.{CallOptions, ClientCall, Grpc}
 import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
 import monix.reactive.subjects.ConcurrentSubject
+import scalapb.TextFormat
 
 import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.duration.FiniteDuration
@@ -97,7 +98,7 @@ class GrpcBlockchainUpdatesControlledStream(channel: RestartableManagedChannel, 
             s"append tpe=$tpe, $ref"
         }
       }
-      log.debug(s"$logPrefix Got $message")
+      log.debug(s"$logPrefix Got $message: ${TextFormat.printToSingleLineUnicodeString(value)}")
       super.onNext(value)
     }
 

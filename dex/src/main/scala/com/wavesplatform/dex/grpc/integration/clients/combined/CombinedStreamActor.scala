@@ -261,8 +261,6 @@ object CombinedStreamActor {
             case Command.UpdateProcessedHeight(x) =>
               processedHeight.set(x)
               Behaviors.same
-
-            case x => logAndIgnore(s"Unexpected $x")
           }.orElse(onClosedOrRestart)
         }
       }

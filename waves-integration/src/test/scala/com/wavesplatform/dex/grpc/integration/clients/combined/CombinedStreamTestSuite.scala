@@ -115,6 +115,8 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
           "eventually recovered" in {
             val t = mkEventuallyWorking()
             t.blockchainUpdates.systemStream.onNext(SystemEvent.Stopped)
+
+            Thread.sleep(100) // Because Working happens multiple times
             eventually {
               t.cs.currentStatus should matchTo[Status](Status.Working)
             }
@@ -159,9 +161,18 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
             val t = mkEventuallyWorking()
             t.utxEvents.systemStream.onNext(SystemEvent.Stopped)
 
-            logged(t.utxEvents.systemStream)(_ should matchTo(List[SystemEvent](SystemEvent.BecameReady, SystemEvent.Stopped, SystemEvent.BecameReady)))
-            logged(t.blockchainUpdates.systemStream)(_ should matchTo(List[SystemEvent](SystemEvent.BecameReady, SystemEvent.Stopped, SystemEvent.BecameReady)))
+            logged(t.utxEvents.systemStream)(_ should matchTo(List[SystemEvent](
+              SystemEvent.BecameReady,
+              SystemEvent.Stopped,
+              SystemEvent.BecameReady
+            )))
+            logged(t.blockchainUpdates.systemStream)(_ should matchTo(List[SystemEvent](
+              SystemEvent.BecameReady,
+              SystemEvent.Stopped,
+              SystemEvent.BecameReady
+            )))
 
+            Thread.sleep(100) // Because Working happens multiple times
             eventually {
               t.cs.currentStatus should matchTo[Status](Status.Working)
             }
@@ -188,13 +199,44 @@ class CombinedStreamTestSuite extends WavesIntegrationSuiteBase with Eventually 
         }
       }
     }
+
+    "bugs" - {
+      "DEX-1159 Failed to restart" in {
+        (1 to 10).foreach { _ =>
+          val t = mkEventuallyWorking()
+
+          t.cs.restart()
+          Thread.sleep(3)
+//        t.utxEvents.systemStream.onNext(SystemEvent.Stopped)
+          t.cs.restart()
+//        t.blockchainUpdates.systemStream.onNext(SystemEvent.Stopped)
+//        t.utxEvents.systemStream.onNext(SystemEvent.Stopped)
+//        t.cs.restart()
+//        t.utxEvents.systemStream.onNext(SystemEvent.Stopped)
+//        t.cs.restart()
+
+          // TO parse from string use TextFormat.fromAscii
+
+
+          Thread.sleep(10) // Because Working happens multiple times
+          eventually {
+            t.cs.currentStatus should matchTo[Status](Status.Working)
+          }
+        // utx: BecameReady, bu: BecameReady
+
+//        logged(t.utxEvents.systemStream)(_ should matchTo(List[SystemEvent](SystemEvent.BecameReady, SystemEvent.Stopped, SystemEvent.BecameReady)))
+//        logged(t.blockchainUpdates.systemStream)(_ should matchTo(List[SystemEvent](SystemEvent.BecameReady, SystemEvent.Stopped, SystemEvent.BecameReady)))
+
+        }
+      }
+    }
   }
 
   private def mk(): TestClasses = {
     val blockchainUpdates = new BlockchainUpdatesControlledStreamMock
     val utxEvents = new UtxEventsControlledStreamMock
     val cs = new MonixCombinedStream(
-      CombinedStream.Settings(restartDelay = 10.millis),
+      CombinedStream.Settings(restartDelay = 1.millis),
       blockchainUpdates = blockchainUpdates,
       utxEvents = utxEvents
     )

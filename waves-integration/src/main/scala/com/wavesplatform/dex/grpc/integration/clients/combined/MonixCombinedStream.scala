@@ -22,11 +22,11 @@ import scala.util.chaining._
  * 3. Recover the blockchain updates stream
  */
 class MonixCombinedStream(
-  settings: Settings,
-  blockchainUpdates: BlockchainUpdatesControlledStream,
-  utxEvents: UtxEventsControlledStream
-)(implicit scheduler: Scheduler)
-    extends CombinedStream
+                           settings: Settings,
+                           blockchainUpdates: BlockchainUpdatesControlledStream,
+                           utxEvents: UtxEventsControlledStream
+                         )(implicit scheduler: Scheduler)
+  extends CombinedStream
     with ScorexLogging {
 
   // Note, it is:
@@ -159,7 +159,7 @@ class MonixCombinedStream(
       case origStatus: Status.Stopping =>
         event match {
           case SystemEvent.BecameReady =>
-            utxEvents.stop()
+            //utxEvents.stop()
             ignore()
 
           case SystemEvent.Stopped =>
@@ -201,7 +201,7 @@ class MonixCombinedStream(
             }
 
           case _ =>
-            blockchainUpdates.close()
+            //blockchainUpdates.close()
             ignore()
         }
 
@@ -236,7 +236,7 @@ class MonixCombinedStream(
       case origStatus: Status.Stopping =>
         event match {
           case SystemEvent.BecameReady =>
-            blockchainUpdates.stop()
+            //blockchainUpdates.stop()
             ignore()
 
           case SystemEvent.Stopped =>
@@ -278,7 +278,7 @@ class MonixCombinedStream(
             }
 
           case _ =>
-            utxEvents.close()
+            //utxEvents.close()
             ignore()
         }
       case _ => throw new IllegalArgumentException(s"Can't process unexpected status=$origStatus. It should be member of ${Status.getClass}")
@@ -291,7 +291,7 @@ class MonixCombinedStream(
     // But we processed the previous block without doubt.
     val updatedProcessedHeight = math.max(1, processedHeight - 1)
     internalStream.onNext(WavesNodeEvent.RolledBack(WavesNodeEvent.RolledBack.To.Height(updatedProcessedHeight)))
-    utxEvents.start()
+    //utxEvents.start()
     // We need to updated this too, because RolledBack could not be processed
     // before we call startFrom in utxEventsTransitions: Starting + BecameReady
     updateProcessedHeight(updatedProcessedHeight)
