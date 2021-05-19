@@ -30,9 +30,9 @@ class CompositeHttpService(apiTypes: Set[Class[_]], routes: Seq[ApiRoute], setti
   private val notFound: Route = mkTracedRoute("/notFound")(complete(StatusCodes.NotFound))
 
   //TODO
-  //initially span name is /unknown and will be overridden in subsequent routes
-  //so this should never be logged in jaeger and all such cases have to be fixed manually
-  val compositeRoute: Route = mkTracedRoute("/unknown", forceSamplingDecision = false) {
+  //initially span name is /rejected and will be overridden in subsequent routes
+  //we should minimize rejected spans in order to prevent jaeger overflowing with useless spans
+  val compositeRoute: Route = mkTracedRoute("/rejected", forceSamplingDecision = false) {
     extendRoute(concat(routes.map(_.route): _*)) ~ swaggerRoute ~ notFound
   }
 

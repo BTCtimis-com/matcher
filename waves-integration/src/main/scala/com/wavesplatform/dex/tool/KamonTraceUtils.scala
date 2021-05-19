@@ -16,7 +16,13 @@ object KamonTraceUtils {
     Kamon.currentSpan().name(name)
 
   def setSpanNameAndForceSamplingDecision(name: String): Unit = {
-    Kamon.currentSpan().takeSamplingDecision() //forces span sample decision inferring
+    //initially span has Unknown state and there is no 100% guarantee that it will be logged in jaeger
+    //so we have to force sampling decision (apply our sampler to a span) to force its state
+    //Unknown -> Sample
+    //Unknown -> DoNotSample
+    //in case when a span is marked as Sample it will be sent in jaeger.
+    Kamon.currentSpan().takeSamplingDecision()
+
     Kamon.currentSpan().name(name)
   }
 
