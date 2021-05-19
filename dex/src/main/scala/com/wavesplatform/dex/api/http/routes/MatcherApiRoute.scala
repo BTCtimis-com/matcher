@@ -253,7 +253,10 @@ class MatcherApiRoute(
     response = classOf[String]
   )
   def getMatcherPublicKey: Route =
-    (pathEndOrSingleSlash & get)((measureResponse("getMatcherPublicKey") & protect)(complete(matcherPublicKey.toJson)))
+    (pathEndOrSingleSlash & get)((measureResponse("getMatcherPublicKey") & protect) {
+      setSpanNameAndForceSamplingDecision("/getMatcherPublicKey")
+      complete(matcherPublicKey.toJson)
+    })
 
   @Path("/settings")
   @ApiOperation(

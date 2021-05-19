@@ -7,7 +7,6 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives.respondWithHeader
 import akka.pattern.{ask, gracefulStop, CircuitBreaker}
 import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
 import akka.util.Timeout
 import cats.data.EitherT
 import cats.instances.future.catsStdInstancesForFuture
@@ -406,12 +405,10 @@ class Application(settings: MatcherSettings, config: Config)(implicit val actorS
       http.newServerAt(settings.restApi.address, settings.restApi.port)
         .adaptSettings { settings =>
           settings.withParserSettings(settings.parserSettings.withCustomMediaTypes(CustomMediaTypes.`application/hocon`))
-        }.connectionSource().to {
-          Sink.foreach { connection =>
-            connection.handleWith(MetricHttpFlow.metricFlow(combinedRoute))
-          }
-        }.run().map(_.addToCoordinatedShutdown(hardTerminationDeadline = 5.seconds))
-    } map { serverBinding =>
+        }
+        .bindFlow(MetricHttpFlow.metricFlow(combinedRoute))
+        .map(_.addToCoordinatedShutdown(hardTerminationDeadline = 5.seconds))
+    }.map { serverBinding =>
       log.info(s"REST and WebSocket API bound to ${serverBinding.localAddress}")
     }
 

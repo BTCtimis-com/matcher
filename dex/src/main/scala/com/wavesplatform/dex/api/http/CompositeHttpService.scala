@@ -31,7 +31,7 @@ class CompositeHttpService(apiTypes: Set[Class[_]], routes: Seq[ApiRoute], setti
 
   //initially span name is "/rejected" and will be overridden in subsequent routes
   //"/rejected" spans will be filtered out by FilteringRejectedHook
-  val compositeRoute: Route = mkTracedRoute("/rejected", forceSamplingDecision = false) {
+  val compositeRoute: Route = mkTracedRoute("/rejected") {
     extendRoute(concat(routes.map(_.route): _*)) ~ swaggerRoute ~ notFound
   }
 

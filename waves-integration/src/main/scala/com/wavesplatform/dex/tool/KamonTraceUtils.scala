@@ -13,10 +13,8 @@ import scala.concurrent.{ExecutionContext, Future}
 
 object KamonTraceUtils {
 
-  def setSpanName(name: String): Unit =
-    Kamon.currentSpan().name(name)
-
   def setSpanNameAndForceSamplingDecision(name: String): Unit = {
+
     //initially span has Unknown state and there is no 100% guarantee that it will be logged in jaeger
     //so we have to force sampling decision (apply our sampler to a span) to force its state
     //Unknown -> Sample
@@ -27,11 +25,8 @@ object KamonTraceUtils {
     Kamon.currentSpan().name(name)
   }
 
-  def mkTracedRoute(operationName: String, forceSamplingDecision: Boolean = true)(route: Route): Route = mapInnerRoute { route => ctx =>
-    if (forceSamplingDecision)
-      setSpanNameAndForceSamplingDecision(operationName)
-    else
-      setSpanName(operationName)
+  def mkTracedRoute(operationName: String)(route: Route): Route = mapInnerRoute { route => ctx =>
+    setSpanNameAndForceSamplingDecision(operationName)
     route(ctx)
   }(route)
 
