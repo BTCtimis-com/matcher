@@ -11,7 +11,7 @@ import com.wavesplatform.dex.domain.order.{Order, OrderType}
 import com.wavesplatform.dex.domain.transaction.{ExchangeTransaction, ExchangeTransactionV2}
 import com.wavesplatform.dex.domain.utils.EitherExt2
 import com.wavesplatform.dex.grpc.integration.IntegrationSuiteBase
-import com.wavesplatform.dex.grpc.integration.clients.combined.{CombinedStream, CombinedWavesBlockchainClient}
+import com.wavesplatform.dex.grpc.integration.clients.combined.{AkkaCombinedStream, CombinedStream, CombinedWavesBlockchainClient}
 import com.wavesplatform.dex.grpc.integration.clients.domain.AddressBalanceUpdates
 import com.wavesplatform.dex.grpc.integration.clients.domain.portfolio.SynchronizedPessimisticPortfolios
 import com.wavesplatform.dex.grpc.integration.dto.BriefAssetDescription
@@ -19,6 +19,8 @@ import com.wavesplatform.dex.grpc.integration.settings.{GrpcClientSettings, Wave
 import com.wavesplatform.dex.it.api.HasToxiProxy
 import com.wavesplatform.dex.it.docker.WavesNodeContainer
 import com.wavesplatform.dex.it.test.{NoStackTraceCancelAfterFailure, Scripts}
+import com.wavesplatform.dex.settings
+import com.wavesplatform.it.MatcherSuiteBase
 import monix.execution.Scheduler
 
 import java.nio.charset.StandardCharsets
@@ -28,7 +30,7 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext}
 import scala.util.Random
 
-class CombinedWavesBlockchainClientTestSuite extends IntegrationSuiteBase with HasToxiProxy with NoStackTraceCancelAfterFailure {
+class CombinedWavesBlockchainClientTestSuite extends MatcherSuiteBase with HasToxiProxy with NoStackTraceCancelAfterFailure {
 
   implicit override def patienceConfig = PatienceConfig(1.minute, 1.second)
 
@@ -85,7 +87,12 @@ class CombinedWavesBlockchainClientTestSuite extends IntegrationSuiteBase with H
       ),
       matcherPublicKey = PublicKey(Array.emptyByteArray), // Doesn't matter here
       monixScheduler = monixScheduler,
-      grpcExecutionContext = ExecutionContext.fromExecutor(grpcExecutor)
+      grpcExecutionContext = ExecutionContext.fromExecutor(grpcExecutor),
+      (meClient, buClient) =>  new AkkaCombinedStream(
+        CombinedStream.Settings(1.second),
+        buClient.blockchainEvents,
+        meClient.utxEvents
+      )(actorSystem, monixScheduler)
     )
 
   private lazy val updates = client.updates.share

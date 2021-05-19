@@ -49,6 +49,7 @@ import com.wavesplatform.dex.logs.SystemInformationReporter
 import com.wavesplatform.dex.model.{AssetPairBuilder, ExchangeTransactionCreator, Fee, OrderValidator, ValidationStages}
 import com.wavesplatform.dex.queue._
 import com.wavesplatform.dex.settings.MatcherSettings
+import com.wavesplatform.dex.settings.utils.ConfigOps.ConfigOps
 import com.wavesplatform.dex.time.NTP
 import kamon.Kamon
 import monix.execution.ExecutionModel
@@ -66,7 +67,6 @@ import scala.concurrent.{blocking, Await, Future, Promise}
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
-import com.wavesplatform.dex.settings.utils.ConfigOps.ConfigOps
 
 class Application(settings: MatcherSettings, config: Config)(implicit val actorSystem: ActorSystem) extends ScorexLogging {
 
